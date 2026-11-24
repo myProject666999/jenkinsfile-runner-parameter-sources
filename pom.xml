@@ -67,7 +67,7 @@ THE SOFTWARE.
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <java.level>21</java.level>
     <maven.compiler.release>21</maven.compiler.release>
-    <jenkins.version>2.555.3</jenkins.version>
+    <jenkins.version>2.591</jenkins.version>
     <jenkins.bom.baseline>bom-2.555.x</jenkins.bom.baseline>
     <jenkins.bom.version>6641.vfe1b_b_3c48a_4a_</jenkins.bom.version>
     <!-- Jenkins core 2.555.x brings spotbugs-annotations 4.9.8 transitively;
