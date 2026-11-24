@@ -1,8 +1,12 @@
 package io.jenkins.jenkinsfile.runner.bootstrap.commands;
 
+import io.jenkins.jenkinsfile.runner.bootstrap.parameters.ParameterSourceException;
+import io.jenkins.jenkinsfile.runner.bootstrap.parameters.ResolvedParameters;
+import io.jenkins.jenkinsfile.runner.bootstrap.parameters.WorkflowParameterResolver;
 import java.io.IOException;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 import picocli.CommandLine;
 
 /**
@@ -40,13 +44,8 @@ public class RunJenkinsfileCommand extends JenkinsfileCommand {
             }
         }
 
-        if (pipelineRunOptions.workflowParameters == null){
-            pipelineRunOptions.workflowParameters = new HashMap<>();
-        }
-        for (Map.Entry<String, String> workflowParameter : pipelineRunOptions.workflowParameters.entrySet()) {
-            if (workflowParameter.getValue() == null) {
-                workflowParameter.setValue("");
-            }
+        if (!resolveWorkflowParameters(System.getenv(), System.out::println)) {
+            System.exit(-1);
         }
 
         if (pipelineRunOptions.cause != null) {
@@ -65,6 +64,38 @@ public class RunJenkinsfileCommand extends JenkinsfileCommand {
         }
 
         super.postConstruct();
+    }
+
+    /**
+     * Merges parameters from {@code --arg-file}, {@code JFR_ARG_*} environment variables and
+     * {@code -a}/{@code --arg} into {@link PipelineRunOptions#workflowParameters}, and records
+     * the names that must be created as secret parameters.
+     *
+     * <p>Fails the run (exit code {@code -1}) when a source cannot be read or the combination
+     * is inconsistent. Error and notice messages never contain parameter values.</p>
+     *
+     * @param environment environment variables, passed explicitly so that it can be substituted in tests
+     * @param notices     consumer for override notices
+     * @return {@code true} if resolution succeeded, {@code false} if the run must not proceed
+     */
+    public boolean resolveWorkflowParameters(Map<String, String> environment, Consumer<String> notices) {
+        final ResolvedParameters resolved;
+        try {
+            resolved = WorkflowParameterResolver.resolve(
+                    pipelineRunOptions.argumentFile,
+                    environment,
+                    pipelineRunOptions.workflowParameters,
+                    pipelineRunOptions.secretArgNames,
+                    notices);
+        } catch (ParameterSourceException e) {
+            System.err.println("Error: " + e.getMessage());
+            return false;
+        }
+
+        // Keep the legacy post-condition: a null option becomes an empty map.
+        pipelineRunOptions.workflowParameters = new LinkedHashMap<>(resolved.getValues());
+        pipelineRunOptions.secretParameters = resolved.getSecretNames();
+        return true;
     }
 
 }

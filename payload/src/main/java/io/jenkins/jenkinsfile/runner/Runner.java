@@ -8,6 +8,8 @@ import hudson.model.Cause;
 import hudson.model.CauseAction;
 import hudson.model.Failure;
 import hudson.model.ParametersAction;
+import hudson.model.ParameterValue;
+import hudson.model.PasswordParameterValue;
 import hudson.model.StringParameterValue;
 import hudson.model.queue.QueueTaskFuture;
 import io.jenkins.jenkinsfile.runner.bootstrap.commands.PipelineRunOptions;
@@ -144,11 +146,26 @@ public class Runner {
     }   
     
     private Action createParametersAction(PipelineRunOptions runOptions) {
-      return new ParametersAction(runOptions.workflowParameters
+      return new ParametersAction(createParameterValues(runOptions));
+    }
+
+    /**
+     * Converts the resolved parameters into Jenkins parameter values.
+     *
+     * <p>The decision which parameters are secret is made by the bootstrap layer
+     * ({@code WorkflowParameterResolver}); this method is only a thin conversion.
+     * It is kept package-private so that the mapping can be tested without
+     * starting a Jenkins instance.</p>
+     */
+    static List<ParameterValue> createParameterValues(PipelineRunOptions runOptions) {
+      // secretParameters is never null: PipelineRunOptions initializes it to an empty set.
+      return runOptions.workflowParameters
             .entrySet()
             .stream()
-            .map(e -> new StringParameterValue(e.getKey(), e.getValue()))
-            .collect(Collectors.toList()));
+            .map(e -> runOptions.secretParameters.contains(e.getKey())
+                    ? new PasswordParameterValue(e.getKey(), e.getValue())
+                    : new StringParameterValue(e.getKey(), e.getValue()))
+            .collect(Collectors.toList());
     }
 
     private CauseAction createCauseAction(String cause) {

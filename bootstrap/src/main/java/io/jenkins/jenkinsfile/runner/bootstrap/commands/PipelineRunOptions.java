@@ -2,7 +2,10 @@ package io.jenkins.jenkinsfile.runner.bootstrap.commands;
 
 import edu.umd.cs.findbugs.annotations.CheckForNull;
 import java.io.File;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import picocli.CommandLine;
 
 // TODO: Split Pipeline and generic options?
@@ -47,9 +50,31 @@ public class PipelineRunOptions extends PipelineOptions {
     public int buildNumber = 1;
 
     @CommandLine.Option(names = { "-a", "--arg" },
-            description = "Parameters to be passed to the build. Use multiple -a switches for multiple params")
+            description = "Parameters to be passed to the build. Use multiple -a switches for multiple params. " +
+                    "Takes precedence over JFR_ARG_* environment variables and --arg-file")
     @CheckForNull
     public Map<String,String> workflowParameters;
+
+    @CommandLine.Option(names = "--arg-file",
+            description = "UTF-8 file with one key=value parameter per line. Blank lines and lines starting " +
+                    "with # are ignored, values may contain '='. Lower precedence than JFR_ARG_* environment " +
+                    "variables and --arg")
+    @CheckForNull
+    public File argumentFile;
+
+    @CommandLine.Option(names = "--secret-arg", split = "",
+            description = "Name of a parameter that must be treated as a secret and exposed as a " +
+                    "PasswordParameterValue. Repeatable. The value is taken from --arg, --arg-file or a " +
+                    "JFR_ARG_* environment variable; it cannot be given here")
+    @CheckForNull
+    public List<String> secretArgNames;
+
+    /**
+     * Names of parameters to be created as secret parameters.
+     * Computed by {@code RunJenkinsfileCommand#postConstruct()} from {@link #secretArgNames},
+     * so that the payload layer does not have to apply the matching rules again.
+     */
+    public Set<String> secretParameters = Collections.emptySet();
 
     @CommandLine.Option(names = { "-ns", "--no-sandbox" },
             description = "Disable workflow job execution within sandbox environment")

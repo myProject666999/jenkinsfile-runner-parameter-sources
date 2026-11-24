@@ -188,7 +188,26 @@ In addition to Jenkins instance arguments defined above, it supports the followi
 * `-a (--arg)` -
     Parameters to be passed to the Pipeline job.
     Use multiple -a switches for multiple params.
-    All parameters will be recognized by Jenkins as String values.
+    Parameters are recognized by Jenkins as String values unless marked by `--secret-arg`.
+    The value is everything after the first `=`, so it may itself contain `=`.
+    If the same key is given several times, the last switch wins (this is picocli's behavior and is covered by tests).
+* `--arg-file FILE` -
+    Reads parameters from a UTF-8 text file, one `key=value` per line.
+    Blank lines and lines starting with `#` are ignored, the first `=` separates name from value,
+    values may contain `=` and are taken verbatim (the name is trimmed).
+    A missing file is an error, as is a line without `=`, an empty name, or the same name twice in one file
+    (the error reports the line numbers and never the values).
+    See <<parameter-sources>> for the precedence between sources.
+* `--secret-arg NAME` -
+    Marks a parameter as a secret; repeat the option for several parameters.
+    The value must come from `-a`, `--arg-file` or a `JFR_ARG_*` environment variable, and cannot be given here.
+    Secret parameters are created as `PasswordParameterValue` instead of `StringParameterValue`.
+    Naming a parameter that no source provides is an error, since it is most likely a typo.
+
+Environment variables named `JFR_ARG_<NAME>` provide the parameter `<NAME>`
+(the prefix is stripped and the rest is matched case-sensitively).
+On Windows environment variable names are case-insensitive, so two variables that differ only in case
+cannot exist there; Jenkinsfile Runner does not compensate for this platform difference.
 
 Advanced options:
 
@@ -229,6 +248,52 @@ $ ./app/target/appassembler/bin/jenkinsfile-runner \
   -a "param1=Hello" \
   -a "param2=value2"
 ....
+
+[[parameter-sources]]
+==== Parameter sources and precedence
+
+Parameters can come from three sources. When the same name appears in several of them,
+the value from the source closest to this invocation wins:
+
+[cols="1,1,2"]
+|===
+|Precedence |Source |Typical use
+
+|lowest
+|`--arg-file`
+|Defaults shipped or mounted into a container image
+
+|middle
+|`JFR_ARG_*` environment variables
+|Per-deployment overrides
+
+|highest
+|`-a` / `--arg`
+|One-off overrides for this run
+|===
+
+Every time a value is overridden, one line is printed with the parameter name and the source names only;
+values are never printed. Example:
+
+....
+# params.properties
+A=1
+B=2
+
+$ JFR_ARG_B=3 jenkinsfile-runner run -f Jenkinsfile --arg-file params.properties \
+    -a B=4 --secret-arg A
+Parameter 'B': using value from command line (overrides argument file, environment variable)
+....
+
+The resulting parameters are `A=1` (secret) and `B=4`.
+
+The bootstrap layer performs the merge and decides which names are secrets; the payload layer only converts
+the result into Jenkins parameter values.
+Jenkinsfile Runner never writes parameter values into merge notices, error messages or its own log output.
+Whether the Jenkins console masks such values depends on the Jenkins core and plugin versions in use,
+so this project does not promise that.
+
+If none of the new options is used, behavior is exactly the same as before.
 
 == Usage in Docker
 
